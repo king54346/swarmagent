@@ -1,0 +1,16 @@
+{
+    "mcpServers": {
+        "tavily": {
+            "description": "Tavily Search - Advanced web search and content analysis",
+            "type": "stdio",
+            "command": "uvx",
+            "args": [
+                "tavily-mcp"
+            ],
+            "env": {
+                "TAVILY_API_KEY": ""
+            },
+            "disabled": true
+        }
+    }
+}
