@@ -1,6 +1,7 @@
 """Data access layer - translates storage.ts to Python."""
 
 import json
+import logging
 from datetime import datetime
 from typing import Any, Optional
 
@@ -10,6 +11,8 @@ from sqlalchemy.orm import Session
 from ..db.engine import create_session
 from ..db.models import Agent, Group, GroupMember, Message, Workspace
 from ..utils import generate_uuid
+
+logger = logging.getLogger(__name__)
 
 
 # Preset Agent role configurations
@@ -392,19 +395,25 @@ class Store:
         guidance: Optional[str] = None,
     ) -> dict[str, Any]:
         """Create a sub-agent with a P2P group to human."""
+        logger.info(f"create_sub_agent_with_p2p: workspace_id={workspace_id}, creator_id={creator_id}, role={role}")
+        
         with self._get_session() as session:
             # Ensure workspace defaults exist
+            logger.info(f"Ensuring workspace defaults for workspace_id={workspace_id}")
             defaults = self.ensure_workspace_defaults(workspace_id)
             human_agent_id = defaults["humanAgentId"]
+            logger.info(f"Got human_agent_id={human_agent_id}")
 
             # Verify workspace exists
             workspace = session.get(Workspace, workspace_id)
             if not workspace:
+                logger.error(f"Workspace not found: {workspace_id}")
                 raise ValueError("workspace not found")
 
             agent_id = generate_uuid()
             group_id = generate_uuid()
             created_at = _now_timestamp()
+            logger.info(f"Creating agent with id={agent_id}, group_id={group_id}")
 
             # Create agent
             agent = Agent(
@@ -442,6 +451,7 @@ class Store:
             ))
 
             session.commit()
+            logger.info(f"Successfully created agent {agent_id} with role={role} and group {group_id}")
 
             return {
                 "agentId": agent_id,

@@ -1,14 +1,18 @@
 """Agent tools using LangChain @tool decorator."""
 
 import asyncio
+import logging
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 from langchain_core.tools import tool
+from pydantic import Field
 
 from ..storage.store import store
 from ..config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 # Builtin tool names
@@ -45,26 +49,48 @@ def create_agent_tools(agent_id: str, workspace_id: str):
             return {"ok": False, "error": str(e)}
 
     @tool
-    def create_agent(role: str, guidance: Optional[str] = None) -> dict:
-        """Create a sub-agent with the given role for delegation. Returns {agentId}."""
-        if not role or not role.strip():
-            return {"ok": False, "error": "Missing role"}
-
+    def create_agent(
+        role: Annotated[str, Field(description="The role name for the sub-agent, e.g. 'CTO', 'CEO', 'CFO', 'Engineer', 'Designer'")],
+        guidance: Annotated[Optional[str], Field(description="Optional custom instructions for the sub-agent")] = None,
+    ) -> dict:
+        """Create a sub-agent with the specified role. You MUST provide the role parameter.
+        
+        Example usage:
+        - create_agent(role="CTO") - creates a CTO sub-agent
+        - create_agent(role="CEO", guidance="Focus on strategy") - creates a CEO with custom guidance
+        
+        Returns:
+            dict with ok=True and agentId, groupId on success, or ok=False and error on failure
+        """
+        logger.info(f"create_agent called with role={role}, guidance={guidance}")
+        
+        if not role:
+            logger.warning("create_agent: Missing role parameter")
+            return {"ok": False, "error": "Missing role parameter. Please provide a role name like 'CTO', 'CEO', or 'CFO'."}
+        
+        role_str = str(role).strip()
+        if not role_str:
+            logger.warning("create_agent: Empty role parameter")
+            return {"ok": False, "error": "Empty role parameter. Please provide a non-empty role name."}
+        
         try:
+            logger.info(f"Creating sub-agent with role={role_str} in workspace={workspace_id}")
             created = store.create_sub_agent_with_p2p(
                 workspace_id=workspace_id,
                 creator_id=agent_id,
-                role=role.strip(),
+                role=role_str,
                 guidance=guidance,
             )
+            logger.info(f"Successfully created agent: {created}")
             return {
                 "ok": True,
                 "agentId": created["agentId"],
-                "role": role,
+                "role": role_str,
                 "groupId": created["groupId"],
             }
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            logger.exception(f"create_agent failed: {e}")
+            return {"ok": False, "error": f"Failed to create agent: {str(e)}"}
 
     @tool
     def list_agents() -> dict:

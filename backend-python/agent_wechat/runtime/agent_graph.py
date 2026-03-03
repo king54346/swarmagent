@@ -1,6 +1,7 @@
 """LangGraph Agent Graph definition."""
 
 import json
+import logging
 from typing import Any, Literal
 
 from langgraph.graph import StateGraph, END
@@ -9,6 +10,8 @@ from ..ai.llm_client import stream_llm
 from ..ai.tools import create_agent_tools, BUILTIN_TOOL_NAMES
 from .agent_state import AgentState, ToolCallEntry, ToolResultEntry
 from .mcp_registry import get_mcp_registry
+
+logger = logging.getLogger(__name__)
 
 
 MAX_TOOL_ROUNDS = 100
@@ -23,16 +26,19 @@ def build_system_prompt(agent_id: str, workspace_id: str, role: str) -> str:
         f"你的角色是: {role}\n"
         f"\n"
         f"回复规则：\n"
-        f"1. 直接用中文回复用户的消息，不要说“我需要调用工具”这类的话\n"
+        f"1. 直接用中文回复用户的消息，不要说'我需要调用工具'这类的话\n"
         f"2. 保持简洁友好，直接回答问题\n"
-        f"3. 如果消息不是给你的，或者是“暂停”、“停止”等指令，不要回复\n"
+        f"3. 如果消息不是给你的，或者是'暂停'、'停止'等指令，不要回复\n"
         f"4. 你的回复会自动发送到群组\n"
         f"\n"
         f"可用工具（仅在需要时使用）：\n"
         f"- 查询信息: self_info, list_agents, list_groups, list_group_members, get_group_messages\n"
         f"- 发送消息: send_group_message, send_direct_message\n"
-        f"- 创建资源: create_agent, create_group\n"
+        f"- 创建代理: create_agent(role='角色名') - 必须提供 role 参数，如 create_agent(role='CTO')\n"
+        f"- 创建群组: create_group\n"
         f"- 执行命令: bash\n"
+        f"\n"
+        f"重要：调用工具时必须提供所有必需参数。例如创建代理时必须指定 role 参数。\n"
     )
 
 
@@ -122,14 +128,21 @@ async def agent_node(state: AgentState) -> dict:
     pending_tool_calls: list[ToolCallEntry] = []
     for tc in tool_calls:
         args = tc.get("arguments", {})
+        tc_name = tc.get("name", "")
+        tc_id = tc.get("id", "")
+        
         if isinstance(args, str):
             try:
                 args = json.loads(args)
-            except json.JSONDecodeError:
-                args = {}
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse tool call arguments for {tc_name}: {args}, error: {e}")
+                # Keep as string for better error message
+                args = {"_raw_args": args, "_parse_error": str(e)}
+        
+        logger.info(f"Tool call prepared: name={tc_name}, args={args}")
         pending_tool_calls.append({
-            "id": tc.get("id", ""),
-            "name": tc.get("name", ""),
+            "id": tc_id,
+            "name": tc_name,
             "arguments": args,
         })
     # 3. 返回内容和工具调用
@@ -180,10 +193,15 @@ async def tools_node(state: AgentState) -> dict:
     for tc in pending_tool_calls:
         tool_name = tc["name"]
         tool_args = tc["arguments"]
+        
+        logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
 
         try:
+            # Check for parse error in args
+            if isinstance(tool_args, dict) and "_parse_error" in tool_args:
+                result = {"ok": False, "error": f"Invalid arguments: {tool_args.get('_raw_args', '')}"}
             # Try builtin tool first
-            if tool_name in tool_map:
+            elif tool_name in tool_map:
                 tool_fn = tool_map[tool_name]
                 # LangChain tools are sync, invoke directly
                 result = tool_fn.invoke(tool_args)
@@ -193,8 +211,10 @@ async def tools_node(state: AgentState) -> dict:
             else:
                 result = {"ok": False, "error": f"Unknown tool: {tool_name}"}
 
+            logger.info(f"Tool {tool_name} result: {result}")
             result_str = json.dumps(result) if isinstance(result, dict) else str(result)
         except Exception as e:
+            logger.exception(f"Tool {tool_name} execution failed: {e}")
             result_str = json.dumps({"ok": False, "error": str(e)})
 
         results.append({
