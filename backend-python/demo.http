@@ -1,0 +1,9 @@
+### GET request to example server
+GET https://examples.http-client.intellij.net/get
+    ?generated-in=PyCharm
+
+###
+# curl -X POST http://localhost:8000/api/admin/reset
+POST http://localhost:8000/api/admin/reset
+
+###

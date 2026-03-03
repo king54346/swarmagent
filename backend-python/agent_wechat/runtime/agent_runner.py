@@ -176,10 +176,10 @@ class AgentRunner:
                 "content": assistant_text,
                 "reasoning_content": assistant_thinking or None,
             })
-            
-            # Auto-send assistant response to group if no tool calls were made
+
+            # 自动发送助手回复到群聊（如果没有工具调用），并通过 UI 事件总线推送消息创建事件
             tool_calls = result.get("tool_calls", [])
-            if not tool_calls:
+            if not tool_calls: # 如果没有调用工具
                 try:
                     msg_result = store.send_message(
                         group_id=group_id,
