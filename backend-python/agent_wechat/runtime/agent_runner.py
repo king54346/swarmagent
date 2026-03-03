@@ -275,12 +275,47 @@ class AgentRunner:
                 # Handle streaming content
                 if event_type == "on_chat_model_stream":
                     chunk = event_data.get("chunk")
-                    if chunk and hasattr(chunk, "content") and chunk.content:
-                        bus.emit(self.agent_id, {
-                            "event": "agent.stream",
-                            "data": {"kind": "content", "delta": chunk.content},
-                        })
+                    if chunk:
+                        # Reasoning/Thinking stream (Qwen, Claude, etc.)
+                        reasoning_delta = None
+                        if hasattr(chunk, "reasoning_content") and chunk.reasoning_content:
+                            reasoning_delta = chunk.reasoning_content
+                        elif hasattr(chunk, "additional_kwargs"):
+                            ak = chunk.additional_kwargs
+                            if "reasoning_content" in ak:
+                                reasoning_delta = ak["reasoning_content"]
+                            elif "thinking" in ak:
+                                reasoning_delta = ak["thinking"]
+                        
+                        if reasoning_delta:
+                            bus.emit(self.agent_id, {
+                                "event": "agent.stream",
+                                "data": {"kind": "reasoning", "delta": reasoning_delta},
+                            })
+                        
+                        # Tool calls stream
+                        if hasattr(chunk, "tool_call_chunks") and chunk.tool_call_chunks:
+                            for tc_chunk in chunk.tool_call_chunks:
+                                tc_id = tc_chunk.get("id") or ""
+                                tc_name = tc_chunk.get("name") or ""
+                                tc_args = tc_chunk.get("args") or ""
+                                if tc_args:
+                                    bus.emit(self.agent_id, {
+                                        "event": "agent.stream",
+                                        "data": {
+                                            "kind": "tool_calls",
+                                            "delta": tc_args,
+                                            "tool_call_id": tc_id,
+                                            "tool_call_name": tc_name,
+                                        },
+                                    })
 
+                        # Content stream
+                        if hasattr(chunk, "content") and chunk.content:
+                            bus.emit(self.agent_id, {
+                                "event": "agent.stream",
+                                "data": {"kind": "content", "delta": chunk.content},
+                            })
                 # Handle tool calls
                 if event_type == "on_tool_start":
                     tool_name = event_name
@@ -296,6 +331,16 @@ class AgentRunner:
 
                 if event_type == "on_tool_end":
                     tool_name = event_name
+                    tool_output = event_data.get("output", "")
+                    # Send tool result to agent stream
+                    bus.emit(self.agent_id, {
+                        "event": "agent.stream",
+                        "data": {
+                            "kind": "tool_result",
+                            "delta": str(tool_output)[:500],  # 限制长度
+                            "tool_call_name": tool_name,
+                        },
+                    })
                     ui_bus.emit(workspace_id, {
                         "event": "ui.agent.tool_call.done",
                         "data": {

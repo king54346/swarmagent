@@ -3,6 +3,8 @@
 from typing import Optional
 
 from langchain_core.language_models import BaseChatModel
+from langchain_deepseek import ChatDeepSeek
+from langchain_qwq import ChatQwen
 
 from ..config import get_settings
 
@@ -23,7 +25,7 @@ def create_glm_model(model_override: Optional[str] = None) -> BaseChatModel:
         model=model_override or settings.glm_model,
     )
 
-
+# reasoning_contentOpenAI 或 Azure OpenAI Chat Completions API 均不返回此信息。OpenAI 的 Chat Completions API不支持推理输出。OpenAI 的 Responses API 提供推理摘要，ChatOpenAI 支持此功能（请参阅此处的文档）。
 def create_qwen_model(model_override: Optional[str] = None) -> BaseChatModel:
     """Create a Qwen (通义千问) chat model."""
     from langchain_openai import ChatOpenAI
@@ -34,10 +36,11 @@ def create_qwen_model(model_override: Optional[str] = None) -> BaseChatModel:
     if base_url.endswith("/chat/completions"):
         base_url = base_url[:-18]
 
-    return ChatOpenAI(
+    return ChatQwen(
         api_key=settings.qwen_api_key,
         base_url=base_url,
         model=model_override or settings.qwen_model,
+        extra_body={"enable_thinking": True},
     )
 
 

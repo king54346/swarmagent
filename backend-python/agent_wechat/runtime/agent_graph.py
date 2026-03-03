@@ -11,7 +11,7 @@ from .agent_state import AgentState, ToolCallEntry, ToolResultEntry
 from .mcp_registry import get_mcp_registry
 
 
-MAX_TOOL_ROUNDS = 3
+MAX_TOOL_ROUNDS = 100
 
 
 def build_system_prompt(agent_id: str, workspace_id: str, role: str) -> str:

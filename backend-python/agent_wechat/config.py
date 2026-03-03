@@ -20,11 +20,11 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "agent_wechat.db"
 
-    # Redis
-    redis_url: str = "redis://:redis_iJRXjE@172.21.2.27:6379"
+    # Redis (空字符串表示使用内存模式)
+    redis_url: str = ""
 
     # LLM Provider
-    llm_provider: Literal["glm", "openrouter", "qwen", "anthropic", "openai"] = "glm"
+    llm_provider: Literal["glm", "openrouter", "qwen", "anthropic", "openai"] = "openai"
 
     # GLM (智谱 AI)
     glm_api_key: str = ""
@@ -49,9 +49,9 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-3-5-sonnet-20241022"
 
     # OpenAI
-    openai_api_key: str = ""
-    openai_base_url: str = "https://api.openai.com/v1"
-    openai_model: str = "gpt-4o"
+    openai_api_key: str = "hApEHVmHSZm1-4NHWfPWfUy9boJ4ZngnqUlJJ3_AYErSyAMNKDAg6TSeLx7-_9NXiFzAT2LArA"
+    openai_base_url: str = "https://router.shengsuanyun.com/api/v1"
+    openai_model: str = "deepseek/deepseek-v3.2-think"
 
     # MCP
     mcp_config_path: str = "mcp.json"
