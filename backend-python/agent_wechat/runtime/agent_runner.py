@@ -214,6 +214,15 @@ class AgentRunner:
             workspace_id,
         )
 
+        # Update group context tokens (estimate: ~4 chars per token)
+        try:
+            history_json = json.dumps(history, ensure_ascii=False)
+            estimated_tokens = len(history_json) // 4
+            store.set_group_context_tokens(group_id, estimated_tokens)
+            logger.info(f"Updated group {group_id} context tokens: {estimated_tokens}")
+        except Exception as e:
+            logger.warning(f"Failed to update context tokens for group {group_id}: {e}")
+
         # Emit UI event
         ui_bus.emit(workspace_id, {
             "event": "ui.agent.history.persisted",

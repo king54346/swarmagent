@@ -979,6 +979,29 @@ class Store:
 
             return {"contextTokens": tokens}
 
+    def update_group_context_tokens_from_messages(self, group_id: str) -> dict[str, int]:
+        """Calculate and update context tokens based on all messages in the group."""
+        with self._get_session() as session:
+            group = session.get(Group, group_id)
+            if not group:
+                raise ValueError("group not found")
+
+            # Get all messages in the group
+            stmt = select(Message.content).where(Message.group_id == group_id)
+            contents = session.execute(stmt).scalars().all()
+
+            # Calculate total characters and estimate tokens (~4 chars per token)
+            total_chars = sum(len(c) for c in contents if c)
+            estimated_tokens = total_chars // 4
+
+            # Update the group
+            session.execute(
+                update(Group).where(Group.id == group_id).values(context_tokens=estimated_tokens)
+            )
+            session.commit()
+
+            return {"contextTokens": estimated_tokens}
+
     # ==================== Message Operations ====================
 
     def list_messages(self, group_id: str) -> list[dict[str, Any]]:

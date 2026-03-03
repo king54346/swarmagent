@@ -49,6 +49,7 @@ async def send_message(group_id: str, body: MessageCreate):
     发送消息后会：
     1. 通过 UI 事件总线推送消息创建事件
     2. 唤醒群组内的其他 Agent 进行响应
+    3. 更新群组的 context tokens
     
     Args:
         group_id: 群组ID
@@ -88,6 +89,13 @@ async def send_message(group_id: str, body: MessageCreate):
                     },
                 },
             })
+
+            # Update group context tokens
+            try:
+                store.update_group_context_tokens_from_messages(group_id)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to update context tokens: {e}")
 
             # Wake agents in the group
             runtime = get_agent_runtime()

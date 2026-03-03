@@ -417,9 +417,13 @@ function IMPageInner() {
     }, [agents, collapsedAgents, groupByAgentId, session]);
 
     const extraGroups = useMemo(() => {
-        if (!session) return groups;
+        if (!session) return { p2pGroups: [] as Group[], multiGroups: [] as Group[] };
         const mappedIds = new Set(Array.from(groupByAgentId.values()).map((g) => g.id));
-        return groups.filter((g) => !mappedIds.has(g.id));
+        const unmapped = groups.filter((g) => !mappedIds.has(g.id));
+        // P2P: 2人群组，多人群组: >2人
+        const p2pGroups = unmapped.filter((g) => g.memberIds.length === 2);
+        const multiGroups = unmapped.filter((g) => g.memberIds.length > 2);
+        return { p2pGroups, multiGroups };
     }, [groupByAgentId, groups, session]);
 
     const streamAgentId = useMemo(() => {
@@ -551,7 +555,8 @@ function IMPageInner() {
 
     const refreshGroups = useCallback(async (s: WorkspaceDefaults, opts?: { silent?: boolean }) => {
         if (!opts?.silent) setStatus("groups");
-        const q = new URLSearchParams({workspaceId: s.workspaceId, agentId: s.humanAgentId});
+        // 获取所有群组，不仅仅是 human 参与的
+        const q = new URLSearchParams({workspaceId: s.workspaceId});
         const {groups} = await api<{ groups: Group[] }>(`/api/groups?${q.toString()}`);
         setGroups(groups);
         if (!opts?.silent) setStatus("idle");
@@ -1200,33 +1205,44 @@ function IMPageInner() {
                     </div>
                     <div style={{display: "flex", alignItems: "center", gap: 8}}>
                         <div style={{flex: 1, display: "flex", alignItems: "center", gap: 6, minWidth: 0}}>
-                            <span style={{fontSize: 10, opacity: 0.6}}>📊</span>
-                            <div style={{
-                                flex: 1,
-                                height: 6,
-                                background: "rgba(15, 23, 42, 0.6)",
-                                borderRadius: 3,
-                                overflow: "hidden",
-                                border: "1px solid rgba(100, 150, 255, 0.12)",
-                                position: "relative"
-                            }}>
-                                <div style={{
-                                    width: `${Math.min(100, (group.contextTokens / (group.maxContextTokens || 128000)) * 100)}%`,
-                                    height: "100%",
-                                    background: group.contextTokens / (group.maxContextTokens || 128000) > 0.9 ? "linear-gradient(90deg, #f87171 0%, #ef4444 50%, #dc2626 100%)" : group.contextTokens / (group.maxContextTokens || 128000) > 0.7 ? "linear-gradient(90deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)" : "linear-gradient(90deg, #60a5fa 0%, #3b82f6 50%, #2563eb 100%)",
-                                    borderRadius: 2,
-                                    transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
-                                }}/>
-                            </div>
-                            <div className="mono" style={{
-                                fontSize: 9,
-                                fontWeight: 600,
-                                color: group.contextTokens / (group.maxContextTokens || 128000) > 0.9 ? "#fca5a5" : group.contextTokens / (group.maxContextTokens || 128000) > 0.7 ? "#fcd34d" : "#93c5fd",
-                                minWidth: 28,
-                                textAlign: "right",
-                                opacity: 0.9
-                            }}>{Math.round((group.contextTokens / (group.maxContextTokens || 128000)) * 100)}%
-                            </div>
+                            {group.contextTokens > 0 ? (
+                                <>
+                                    <span style={{fontSize: 10, opacity: 0.6}}>📊</span>
+                                    <div style={{
+                                        flex: 1,
+                                        height: 6,
+                                        background: "rgba(15, 23, 42, 0.6)",
+                                        borderRadius: 3,
+                                        overflow: "hidden",
+                                        border: "1px solid rgba(100, 150, 255, 0.12)",
+                                        position: "relative"
+                                    }}>
+                                        <div style={{
+                                            width: `${Math.min(100, (group.contextTokens / (group.maxContextTokens || 128000)) * 100)}%`,
+                                            height: "100%",
+                                            background: group.contextTokens / (group.maxContextTokens || 128000) > 0.9 ? "linear-gradient(90deg, #f87171 0%, #ef4444 50%, #dc2626 100%)" : group.contextTokens / (group.maxContextTokens || 128000) > 0.7 ? "linear-gradient(90deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)" : "linear-gradient(90deg, #60a5fa 0%, #3b82f6 50%, #2563eb 100%)",
+                                            borderRadius: 2,
+                                            transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
+                                        }}/>
+                                    </div>
+                                    <div className="mono" style={{
+                                        fontSize: 9,
+                                        fontWeight: 600,
+                                        color: group.contextTokens / (group.maxContextTokens || 128000) > 0.9 ? "#fca5a5" : group.contextTokens / (group.maxContextTokens || 128000) > 0.7 ? "#fcd34d" : "#93c5fd",
+                                        minWidth: 28,
+                                        textAlign: "right",
+                                        opacity: 0.9
+                                    }}>{Math.round((group.contextTokens / (group.maxContextTokens || 128000)) * 100)}%
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <span style={{fontSize: 10, opacity: 0.6}}>👥</span>
+                                    <span className="muted mono" style={{fontSize: 9}}>
+                                        {group.memberIds.length} 成员
+                                    </span>
+                                </>
+                            )}
                         </div>
                         {group.lastMessage && (<div className="muted mono" style={{
                             fontSize: 9,
@@ -1380,24 +1396,63 @@ function IMPageInner() {
                                      </div>
                                  </div>
                                  <div className="list">
-                                     {agentTreeRows.length === 0 && extraGroups.length === 0 ? (
+                                     {agentTreeRows.length === 0 && extraGroups.p2pGroups.length === 0 && extraGroups.multiGroups.length === 0 ? (
                                          <div style={{padding: 16}} className="muted">No groups yet.</div>) : (
-                                         <>{agentTreeRows.map(({
-                                                                   agent,
-                                                                   group,
-                                                                   depth,
-                                                                   hasChildren,
-                                                                   collapsed,
-                                                                   guides,
-                                                                   isLast
-                                                               }) => group ? renderGroupRow(group, {
-                                             depth,
-                                             hasChildren,
-                                             collapsed,
-                                             agentId: agent.id,
-                                             guides,
-                                             isLast
-                                         }) : null)}{extraGroups.map((g) => renderGroupRow(g))}</>
+                                         <>
+                                             {/* P2P 私聊区域 */}
+                                             <div style={{
+                                                 padding: "8px 12px",
+                                                 fontSize: 11,
+                                                 fontWeight: 600,
+                                                 color: "#94a3b8",
+                                                 borderBottom: "1px solid rgba(100, 150, 255, 0.1)",
+                                                 background: "rgba(59, 130, 246, 0.05)",
+                                                 display: "flex",
+                                                 alignItems: "center",
+                                                 gap: 6
+                                             }}>
+                                                 <span>👤</span> P2P 私聊
+                                             </div>
+                                             {agentTreeRows.map(({
+                                                                    agent,
+                                                                    group,
+                                                                    depth,
+                                                                    hasChildren,
+                                                                    collapsed,
+                                                                    guides,
+                                                                    isLast
+                                                                }) => group ? renderGroupRow(group, {
+                                                 depth,
+                                                 hasChildren,
+                                                 collapsed,
+                                                 agentId: agent.id,
+                                                 guides,
+                                                 isLast
+                                             }) : null)}
+                                             {extraGroups.p2pGroups.map((g) => renderGroupRow(g))}
+                                                                             
+                                             {/* 多人群组区域 */}
+                                             {extraGroups.multiGroups.length > 0 && (
+                                                 <>
+                                                     <div style={{
+                                                         padding: "8px 12px",
+                                                         fontSize: 11,
+                                                         fontWeight: 600,
+                                                         color: "#94a3b8",
+                                                         borderBottom: "1px solid rgba(100, 150, 255, 0.1)",
+                                                         borderTop: "1px solid rgba(100, 150, 255, 0.1)",
+                                                         background: "rgba(168, 85, 247, 0.05)",
+                                                         marginTop: 8,
+                                                         display: "flex",
+                                                         alignItems: "center",
+                                                         gap: 6
+                                                     }}>
+                                                         <span>👥</span> 多人群组 ({extraGroups.multiGroups.length})
+                                                     </div>
+                                                     {extraGroups.multiGroups.map((g) => renderGroupRow(g))}
+                                                 </>
+                                             )}
+                                         </>
                                      )}
                                  </div>
                              </>
@@ -1947,4 +2002,3 @@ function IMPageInner() {
         />
     );
 }
-            
