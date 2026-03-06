@@ -1,1 +1,5 @@
 /frontend/node_modules/*
+
+# Ignore local environment files
+*.env
+/backend-python/.env
